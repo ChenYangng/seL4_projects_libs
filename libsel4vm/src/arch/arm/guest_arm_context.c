@@ -7,7 +7,7 @@
 #include <sel4/sel4.h>
 #include <sel4vm/guest_vm.h>
 #include <sel4vm/guest_vm_util.h>
-#include <sel4vm/arch/guest_arm_context.h>
+#include <sel4vm/arch/guest_loongarch_context.h>
 
 #include "fault.h"
 
