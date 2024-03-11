@@ -194,7 +194,7 @@ void *create_allocated_reservation_frame(vm_t *vm, uintptr_t addr, seL4_CapRight
     }
     vka_cspace_make_path(vm->vka, cookie->frame.cptr, &cookie->mapped_frame);
     alloc_addr = vspace_map_pages(vmm_vspace, &cookie->mapped_frame.capPtr,
-                                  NULL, seL4_AllRights, 1, page_size, 0);
+                                  NULL, seL4_AllRights, 1, page_size, 1);
     if (!alloc_addr) {
         ZF_LOGE("Failed to map allocated frame into vmm vspace");
         vka_free_object(vm->vka, &cookie->frame);

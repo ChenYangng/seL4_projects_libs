@@ -119,6 +119,7 @@ static bool is_ram_region(vm_t *vm, uintptr_t addr, size_t size)
 static memory_fault_result_t default_ram_fault_callback(vm_t *vm, vm_vcpu_t *vcpu, uintptr_t fault_addr,
                                                         size_t fault_length, void *cookie)
 {
+    printf("default_ram_fault_callback\n");
     /* We don't handle RAM faults by default unless the callback is specifically overrided, hence we fail here */
     ZF_LOGE("ERROR: UNHANDLED RAM FAULT");
     return FAULT_ERROR;
@@ -168,7 +169,7 @@ int vm_ram_touch(vm_t *vm, uintptr_t addr, size_t size, ram_touch_callback_fn to
         access_cookie.offset = current_addr - addr;
         access_cookie.current_addr = current_addr;
         int result = vspace_access_page_with_callback(&vm->mem.vm_vspace, &vm->mem.vmm_vspace, (void *)current_aligned,
-                                                      seL4_PageBits, seL4_AllRights, 1, touch_access_callback, &access_cookie);
+                                                      seL4_PageBits, seL4_AllRights, 0, touch_access_callback, &access_cookie);
         if (result) {
             return result;
         }

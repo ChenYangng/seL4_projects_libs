@@ -100,22 +100,29 @@ static memory_fault_result_t handle_event_bar_fault(vm_t *vm, vm_vcpu_t *vcpu, u
     struct connection_info *info = (struct connection_info *)d->priv;
     uint8_t reg = (fault_addr - d->pstart) & 0xff;
 
+    // printf("handle_event_bar_fault...\n");
     if (is_vcpu_read_fault(vcpu)) {
         /* This shouldn't happen - the guest should have read writes to the event bar */
+        printf("vcpu read fault\n");
         ZF_LOGE("Error: Event Bar Memory is misconfigured");
     } else if (reg == EVENT_BAR_EMIT_REGISTER) {
         /* Emit operation: Write to register 0 */
+        // printf("Event Bar emit!\n");
         if (!info->connection.emit_fn) {
             ZF_LOGE("Connection is not configured with an emit function\n");
         } else {
             info->connection.emit_fn();
         }
     } else if (reg == EVENT_BAR_CONSUME_EVENT_REGISTER) {
+        // printf("Event Bar consume!\n");
         uint32_t mask = get_vcpu_fault_data_mask(vcpu);
         uint32_t value = get_vcpu_fault_data(vcpu) & mask;
         uint32_t *event_registers = (uint32_t *)info->event_registers;
         event_registers[EVENT_BAR_CONSUME_EVENT_REGISTER_INDEX] = value;
+        // printf("new EVENT_BAR_CONSUME_EVENT_REGISTER val = 0x%x\n", event_registers[EVENT_BAR_CONSUME_EVENT_REGISTER_INDEX]);
+        seL4_LOONGARCH_VCPU_InjectIRQ(vm->vcpus[BOOT_VCPU]->vcpu.cptr, 0);
     } else {
+        printf("Event Bar register unsupported\n");
         ZF_LOGE("Event Bar register unsupported");
     }
     advance_vcpu_fault(vcpu);
@@ -194,8 +201,11 @@ void consume_connection_event(vm_t *vm, seL4_Word event_id, bool inject_irq)
     event_registers[EVENT_BAR_CONSUME_EVENT_REGISTER_INDEX]++;
     if (inject_irq) {
         /* Inject our event interrupt */
-        int err = vm_inject_irq(vm->vcpus[BOOT_VCPU], conn_info->connection_irq);
+        // printf("inject irq %d\n", conn_info->connection_irq);
+        int err = seL4_LOONGARCH_VCPU_InjectIRQ(vm->vcpus[BOOT_VCPU]->vcpu.cptr, conn_info->connection_irq);
+        // int err = vm_inject_irq(vm->vcpus[BOOT_VCPU], conn_info->connection_irq);
         if (err) {
+            printf("Failed to inject connection irq!\n");
             ZF_LOGE("Failed to inject connection irq");
         }
     }
@@ -204,14 +214,14 @@ void consume_connection_event(vm_t *vm, seL4_Word event_id, bool inject_irq)
 
 static int register_consume_event(vm_t *vm, crossvm_handle_t *connection, struct connection_info *conn_info)
 {
-    if (connection->consume_id != -1 && conn_info->connection_irq > 0) {
-        /* Register an irq for the crossvm connection */
-        int err = vm_register_irq(vm->vcpus[BOOT_VCPU], conn_info->connection_irq, connection_consume_ack, NULL);
-        if (err) {
-            ZF_LOGE("Failed to register IRQ for event consume");
-            return -1;
-        }
-    }
+    // if (connection->consume_id != -1 && conn_info->connection_irq > 0) {
+    //     /* Register an irq for the crossvm connection */
+    //     int err = vm_register_irq(vm->vcpus[BOOT_VCPU], conn_info->connection_irq, connection_consume_ack, NULL);
+    //     if (err) {
+    //         ZF_LOGE("Failed to register IRQ for event consume");
+    //         return -1;
+    //     }
+    // }
     return 0;
 }
 

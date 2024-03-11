@@ -21,11 +21,13 @@
 #include "vm.h"
 #include "loongarch_vm.h"
 #include "loongarch_vm_exits.h"
-// #include "fault.h"
+#include "fault.h"
 
 // #include "vgic/vgic.h"
 // #include "syscalls.h"
 #include "mem_abort.h"
+
+void fw_cfg_init(void);
 
 static int vm_user_exception_handler(vm_vcpu_t *vcpu);
 static int vm_vcpu_handler(vm_vcpu_t *vcpu);
@@ -35,11 +37,11 @@ static int vm_vppi_event_handler(vm_vcpu_t *vcpu);
 static vm_exit_handler_fn_t loongarch_exit_handlers[] = {
     [VM_GUEST_ABORT_EXIT] = vm_guest_mem_abort_handler,
     // [VM_SYSCALL_EXIT] = vm_syscall_handler,
-    // [VM_USER_EXCEPTION_EXIT] = vm_user_exception_handler,
+    [VM_USER_EXCEPTION_EXIT] = vm_user_exception_handler,
     // [VM_VGIC_MAINTENANCE_EXIT] = vm_vgic_maintenance_handler,
     // [VM_VCPU_EXIT] = vm_vcpu_handler,
     // [VM_VPPI_EXIT] = vm_vppi_event_handler,
-    // [VM_UNKNOWN_EXIT] = vm_unknown_exit_handler
+    [VM_UNKNOWN_EXIT] = vm_unknown_exit_handler
 };
 
 static int vm_decode_exit(seL4_Word label)
@@ -93,27 +95,32 @@ static int vm_decode_exit(seL4_Word label)
 //     seL4_Reply(reply);
 //     return 0;
 // }
-//
-// static int vm_user_exception_handler(vm_vcpu_t *vcpu)
-// {
-//     seL4_Word ip = seL4_GetMR(0);
-//     ZF_LOGE("%sInvalid instruction fault in VM '%s' on vCPU %d at PC 0x"SEL4_PRIx_word"%s",
-//             ANSI_COLOR(RED, BOLD), vcpu->vm->vm_name, vcpu->vcpu_id, ip, ANSI_COLOR(RESET));
-//
-//     /* Dump registers */
-//     seL4_UserContext regs;
-//     seL4_Error ret = seL4_TCB_ReadRegisters(vm_get_vcpu_tcb(vcpu), false, 0,
-//                                             sizeof(regs) / sizeof(regs.pc), &regs);
-//     if (ret != seL4_NoError) {
-//         ZF_LOGE("Failure reading regs, error %d", ret);
-//     } else {
-//         print_ctx_regs(&regs);
-//     }
-//
-//     seL4_Reply(seL4_MessageInfo_new(0, 0, 0, 0));
-//     return VM_EXIT_HANDLED;
-// }
-//
+
+static int vm_user_exception_handler(vm_vcpu_t *vcpu)
+{
+    printf("vm_user_exception_handler\n");
+    seL4_Word ip = seL4_GetMR(0);
+    seL4_Word sp = seL4_GetMR(1);
+    // seL4_Word ecode = seL4_GetMR(2);
+    printf("ip: 0x%lx, sp: 0x%lx\n", ip, sp);
+    // printf("ip: %lx, sp: %lx, ecode: %lx\n", ip, sp, ecode);
+    // ZF_LOGE("%sInvalid instruction fault in VM '%s' on vCPU %d at PC 0x"SEL4_PRIx_word"%s",
+    //         ANSI_COLOR(RED, BOLD), vcpu->vm->vm_name, vcpu->vcpu_id, ip, ANSI_COLOR(RESET));
+
+    /* Dump registers */
+    seL4_UserContext regs;
+    seL4_Error ret = seL4_TCB_ReadRegisters(vm_get_vcpu_tcb(vcpu), false, 0,
+                                            sizeof(regs) / sizeof(regs.pc), &regs);
+    if (ret != seL4_NoError) {
+        ZF_LOGE("Failure reading regs, error %d", ret);
+    } else {
+        print_ctx_regs(&regs);
+    }
+
+    seL4_Reply(seL4_MessageInfo_new(0, 0, 0, 0));
+    return VM_EXIT_HANDLED;
+}
+
 // static void print_unhandled_vcpu_hsr(vm_vcpu_t *vcpu, uint32_t hsr)
 // {
 //     printf("======= Unhandled VCPU fault from [%s] =======\n", vcpu->vm->vm_name);
@@ -146,15 +153,15 @@ static int vm_decode_exit(seL4_Word label)
 //     print_unhandled_vcpu_hsr(vcpu, hsr);
 //     return VM_EXIT_HANDLE_ERROR;
 // }
-//
-// static int vm_unknown_exit_handler(vm_vcpu_t *vcpu)
-// {
-//     /* What? Why are we here? What just happened? */
-//     ZF_LOGE("Unknown fault from [%s]", vcpu->vm->vm_name);
-//     vcpu->vm->run.exit_reason = VM_GUEST_UNKNOWN_EXIT;
-//     return VM_EXIT_HANDLE_ERROR;
-// }
-//
+
+static int vm_unknown_exit_handler(vm_vcpu_t *vcpu)
+{
+    /* What? Why are we here? What just happened? */
+    ZF_LOGE("Unknown fault from [%s]", vcpu->vm->vm_name);
+    vcpu->vm->run.exit_reason = VM_GUEST_UNKNOWN_EXIT;
+    return VM_EXIT_HANDLE_ERROR;
+}
+
 // static int vcpu_stop(vm_vcpu_t *vcpu)
 // {
 //     vcpu->vcpu_online = false;
@@ -201,6 +208,8 @@ int vm_run_arch(vm_t *vm)
     int ret;
 
     ret = 1;
+
+    fw_cfg_init();
     /* Loop, handling events */
     while (ret > 0) {
         seL4_MessageInfo_t tag;
@@ -222,6 +231,13 @@ int vm_run_arch(vm_t *vm)
                 if (ret == VM_EXIT_HANDLE_ERROR) {
                     vm->run.exit_reason = VM_GUEST_ERROR_EXIT;
                 }
+                // if (ret == VM_EXIT_HANDLE_ERROR) {
+                //     printf("VM_EXIT_HANDLE_ERROR\n");
+                // } else if (ret == VM_EXIT_UNHANDLED) {
+                //     printf("VM_EXIT_UNHANDLED\n");
+                // } else {
+                //     printf("VM_EXIT_HANDLED\n");
+                // }
             }
         } else {
             if (vm->run.notification_callback) {

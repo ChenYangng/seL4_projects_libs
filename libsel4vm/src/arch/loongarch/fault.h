@@ -15,10 +15,10 @@ typedef struct vm_vcpu vm_vcpu_t;
 typedef struct fault fault_t;
 
 enum fault_width {
-    WIDTH_DOUBLEWORD,
-    WIDTH_WORD,
+    WIDTH_BYTE,
     WIDTH_HALFWORD,
-    WIDTH_BYTE
+    WIDTH_WORD,
+    WIDTH_DOUBLEWORD,
 };
 
 typedef enum {
@@ -27,8 +27,42 @@ typedef enum {
     VCPU
 } fault_type_t;
 
-#define CPSR_THUMB                 BIT(5)
-#define CPSR_IS_THUMB(x)           ((x) & CPSR_THUMB)
+enum mem_op_type {
+    LD = 1,
+    ST
+};
+
+enum ecode {
+    INT,
+    PIL,
+    PIS,
+    PIF,
+    PME,
+    PNR,
+    PNX,
+    PPI,
+    ADEF, 
+    ADEM = ADEF,
+    ALE,
+    BCE,
+    SYS,
+    BRK,
+    INE,
+    IPE,
+    FPD,
+    SXD,
+    ASXD,
+    FPE,
+    VFPE = FPE,
+    WPEF,
+    WPEM = WPEF,
+    BTD,
+    BTE,
+    GSPR,
+    HVC,
+    GCSC,
+    GCHC = GCSC
+};
 
 /**
  * Data structure representating a fault
@@ -53,8 +87,8 @@ struct fault {
     seL4_Word fsr;
 /// type of fault
     fault_type_t type;
-/// For multiple str/ldr and 32 bit access, the fault is handled in stages
-    int stage;
+/// mem op type
+    enum mem_op_type mem_op;
 /// If the instruction requires fetching, cache it here
     seL4_Word instruction;
 /// The width of the fault
@@ -63,6 +97,8 @@ struct fault {
     processor_mode_t pmode;
 /// The active content within the fault structure to allow lazy loading
     int content;
+/// Whether the fault has benn handled 
+    bool is_handled;
 };
 typedef struct fault fault_t;
 
@@ -227,6 +263,9 @@ void fault_set_ctx(fault_t *f, seL4_UserContext *ctx);
  */
 seL4_Word fault_get_fsr(fault_t *fault);
 
+
+seL4_Word fault_get_inst(fault_t *fault);
+
 /**
  * Determine if a fault is a prefetch fault
  * @param[in] fault  A handle to the fault
@@ -248,21 +287,10 @@ int fault_is_wfi(fault_t *fault);
  */
 int fault_is_vcpu(fault_t *f);
 
-/**
- * Determine if a fault was caused by a 32 bit instruction
- * @param[in] fault  A handle to the fault
- * @return           0 if it is a 16 bit instruction, otherwise, it is 32bit
- */
-int fault_is_32bit_instruction(fault_t *f);
 
 /****************
  ***  Helpers ***
  ****************/
-
-static inline int fault_is_16bit_instruction(fault_t *f)
-{
-    return !fault_is_32bit_instruction(f);
-}
 
 static inline int fault_is_data(fault_t *f)
 {
@@ -271,7 +299,8 @@ static inline int fault_is_data(fault_t *f)
 
 static inline int fault_is_write(fault_t *f)
 {
-    return (fault_get_fsr(f) & (1U << 6));
+   uint8_t ecode = fault_get_fsr(f); 
+   return ecode == 0x2 || ecode == 0x4;
 }
 
 static inline int fault_is_read(fault_t *f)
@@ -287,7 +316,6 @@ static inline seL4_Word fault_get_addr_word(fault_t *f)
 seL4_Word *decode_rt(int reg, seL4_UserContext *c);
 int decode_vcpu_reg(int rt, fault_t *f);
 void fault_print_data(fault_t *fault);
-bool fault_is_thumb(fault_t *f);
 
 /***************
  ***  Debug  ***

@@ -195,6 +195,7 @@ static uintptr_t load_guest_kernel_image(vm_t *vm, const char *kernel_image_name
     }
     /* Determine the load address */
     switch (ret_file_type) {
+    case IMG_ELF:
     case IMG_BIN:
         load_addr = vm->entry;
         break;
@@ -224,6 +225,7 @@ static uintptr_t load_guest_module_image(vm_t *vm, const char *image_name, uintp
     }
     /* Determine the load address */
     switch (ret_file_type) {
+    case IMG_BIN:
     case IMG_DTB:
     case IMG_INITRD_GZ:
         load_addr = load_base_addr;
